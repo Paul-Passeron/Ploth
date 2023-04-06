@@ -9,7 +9,8 @@ type intrinsic =
 type keyword = 
   | If
   | Else
-  | End;;
+  | End
+  | Begin;;
 
 type arithmetic =
   | Plus
@@ -51,7 +52,6 @@ let pop (s: 'a stack): 'a * 'a stack = match s with
   | Empty -> failwith "Can't pop an empty stack."
   | Node(a,s) -> a, s;;
 
-and 'a branch = 'a * 'a prog;;
   
 type 'a prog_elem =
   | Op of prog_token
@@ -83,7 +83,7 @@ let human (t: prog_token): string = match t with
   | Intrinsic(Drop) -> "`drop` intrinsic"
   | Intrinsic(Over) -> "`over` intrinsic";;
 
-type branch_identifier = (keyword)
+type branch_identifier = keyword;;
 
 let append_branch elem br = match br with
   | Branch(b, li) -> Branch(b, li@[elem])
@@ -281,7 +281,6 @@ let get_prog_from_file (filename: string): string list =
   !res;;
 
 
-
 let get_tok_l (l: string list): prog_token list =
   let rec aux l = match l with
     | [] -> []
@@ -312,25 +311,30 @@ let get_tok_l (l: string list): prog_token list =
     | "end"::q -> Keyword(End)::(aux q)
     | e::q -> Int(int_of_string e)::(aux q) in
   aux l;;
-(*
-let run_programme p = let _ = parse_prog p in ();;
 
-let run_programme_from_file (filename: string) = 
-  let programme = get_prog_from_file filename in
-  let p =  get_prog_from_l_o_t programme in
-  parse_prog p;;*)
-(*
-run_programme_from_file "test_prog.txt";;
-get_prog_from_file "test_prog.txt";;
-*)
+(*On prend en entree une liste qui commence par If et qui compprte un End*)
+let rec get_code_if_else tok_l : (keyword prog_elem * prog_token list)=
+  let rec aux (l: prog_token list) (acc: keyword prog_elem):
+  (keyword prog_elem * prog_token list)= match l with
+    | Keyword End::q -> acc, q
+    | Keyword If::q ->
+        let block, rest = get_code_if_else q in
+        (append_branch block acc), rest
+    | e::q -> aux q (append_branch (Op(e)) acc)
+    | [] -> failwith "`if` blocks should always be closed with `end` keyword." in
+  aux tok_l (Branch(If, []));;
 
-let rec parse_prog (tok_l: prog_token list) = match tok_l with
-  | Keyword _::q -> parse_prog q
-  | Op(a)::q -> a::(parse_prog q);;
+let parse_prog (tok_l: prog_token list): keyword prog =
+  let code, rest = get_code_if_else tok_l in
+  match code with
+    | Branch(If, b) -> [Branch(Begin, b)]
+    | _ -> failwith "";;
 
-let string_l = get_prog_from_file "test_prog.txt"
+let string_l = get_prog_from_file "test_prog.txt";;
 let tok_l = get_tok_l string_l;;
-let wo_k = parse_prog tok_l;;
+let if_else, other = get_code_if_else tok_l;;
+if_else;;
+let parsed = parse_prog tok_l;;
 (*
 While and if will work pretty much the same -> pop the stack and get a boolean (should throw an exception if it's something else) and execute the branch or not (for the moment there is no else but it can be implemented with a consecutive if that checks the opposite.) If the keyword of the branch is If then you're done after executing the branch but if it is while you execute the branch again.
 *)
