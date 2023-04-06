@@ -45,6 +45,20 @@ type 'a stack =
   | Empty
   | Node of 'a * 'a stack;;
 
+let push (elem: 'a) (s: 'a stack) :'a stack = Node(elem, s);;
+
+let pop (s: 'a stack): 'a * 'a stack = match s with
+  | Empty -> failwith "Can't pop an empty stack."
+  | Node(a,s) -> a, s;;
+
+and 'a branch = 'a * 'a prog;;
+  
+type 'a prog_elem =
+  | Op of prog_token
+  | Branch of 'a branch
+and 'a prog = ('a prog_elem) list
+and 'a branch = 'a * 'a prog;;
+
 let human (t: prog_token): string = match t with
   | Int(_) -> "`integer`"
   | Bool(_) -> "`bool` type"
@@ -69,25 +83,15 @@ let human (t: prog_token): string = match t with
   | Intrinsic(Drop) -> "`drop` intrinsic"
   | Intrinsic(Over) -> "`over` intrinsic";;
 
-let push (elem: 'a) (s: 'a stack) :'a stack = Node(elem, s);;
+type branch_identifier = (keyword)
 
-let pop (s: 'a stack): 'a * 'a stack = match s with
-  | Empty -> failwith "Can't pop an empty stack."
-  | Node(a,s) -> a, s;;
+let append_branch elem br = match br with
+  | Branch(b, li) -> Branch(b, li@[elem])
+  | _ -> failwith "Object is not branch";;
 (*
-type sub_prog =
-  | Op of prog_token
-  | Branch of bool * (prog_token list);;
-
-type prog = sub_prog list;;
+let main_branch = Branch(true, [Op(Int(1)); Op(Int(2)); Op(Arithmetic(Plus)); Op(Bool(true)); Branch(false, ([Op(Intrinsic(Print))]))]);;
+append_branch (Op(Int(10))) main_branch;;
 *)
-
-type 'a prog_elem =
-  | Op of prog_token
-  | Branch of ('a * 'a prog)
-and 'a prog = ('a prog_elem) list;;
-
-
 let print_bool b = match b with
   | true -> print_string "true"
   | _ -> print_string "false";;
@@ -281,32 +285,32 @@ let get_prog_from_file (filename: string): string list =
 let get_tok_l (l: string list): prog_token list =
   let rec aux l = match l with
     | [] -> []
-    | "+"::q -> Arithmetic(Plus)::(aux q )
-    | "-"::q -> Arithmetic(Minus)::(aux q )
-    | "*"::q -> Arithmetic(Mult)::(aux q )
-    | "divmod"::q -> Arithmetic(Divmod)::(aux q )
-    | "max"::q -> Arithmetic(Max)::(aux q )
-    | "print"::q -> Intrinsic(Print)::(aux q )
-    | "dup"::q -> Intrinsic(Dup)::(aux q )
-    | "swap"::q -> Intrinsic(Swap)::(aux q )
-    | "drop"::q -> Intrinsic(Drop)::(aux q )
-    | "rot"::q -> Intrinsic(Rot)::(aux q )
-    | "over"::q -> Intrinsic(Over)::(aux q )
-    | "true"::q -> Bool(true)::(aux q )
-    | "false"::q -> Bool(false)::(aux q )
-    | "<="::q -> Comparator(Leq)::(aux q )
-    | "<"::q -> Comparator(L)::(aux q )
-    | ">="::q -> Comparator(Geq)::(aux q )
-    | ">"::q -> Comparator(G)::(aux q )
-    | "="::q -> Comparator(Eq)::(aux q )
-    | "!="::q -> Comparator(Neq)::(aux q )
-    | "!!"::q -> Gate(Not)::(aux q )
-    | "&&"::q -> Gate(And)::(aux q )
-    | "||"::q -> Gate(Or)::(aux q )
+    | "+"::q -> Arithmetic(Plus)::(aux q)
+    | "-"::q -> Arithmetic(Minus)::(aux q)
+    | "*"::q -> Arithmetic(Mult)::(aux q)
+    | "divmod"::q -> Arithmetic(Divmod)::(aux q)
+    | "max"::q -> Arithmetic(Max)::(aux q)
+    | "print"::q -> Intrinsic(Print)::(aux q)
+    | "dup"::q -> Intrinsic(Dup)::(aux q)
+    | "swap"::q -> Intrinsic(Swap)::(aux q)
+    | "drop"::q -> Intrinsic(Drop)::(aux q)
+    | "rot"::q -> Intrinsic(Rot)::(aux q)
+    | "over"::q -> Intrinsic(Over)::(aux q)
+    | "true"::q -> Bool(true)::(aux q)
+    | "false"::q -> Bool(false)::(aux q)
+    | "<="::q -> Comparator(Leq)::(aux q)
+    | "<"::q -> Comparator(L)::(aux q)
+    | ">="::q -> Comparator(Geq)::(aux q)
+    | ">"::q -> Comparator(G)::(aux q)
+    | "="::q -> Comparator(Eq)::(aux q)
+    | "!="::q -> Comparator(Neq)::(aux q)
+    | "!!"::q -> Gate(Not)::(aux q)
+    | "&&"::q -> Gate(And)::(aux q)
+    | "||"::q -> Gate(Or)::(aux q)
     | "if"::q -> Keyword(If)::(aux q)
     | "else"::q -> Keyword(Else)::(aux q)
     | "end"::q -> Keyword(End)::(aux q)
-    | e::q -> Int(int_of_string e)::(aux q ) in
+    | e::q -> Int(int_of_string e)::(aux q) in
   aux l;;
 (*
 let run_programme p = let _ = parse_prog p in ();;
@@ -320,7 +324,13 @@ run_programme_from_file "test_prog.txt";;
 get_prog_from_file "test_prog.txt";;
 *)
 
-
+let rec parse_prog (tok_l: prog_token list) = match tok_l with
+  | Keyword _::q -> parse_prog q
+  | Op(a)::q -> a::(parse_prog q);;
 
 let string_l = get_prog_from_file "test_prog.txt"
 let tok_l = get_tok_l string_l;;
+let wo_k = parse_prog tok_l;;
+(*
+While and if will work pretty much the same -> pop the stack and get a boolean (should throw an exception if it's something else) and execute the branch or not (for the moment there is no else but it can be implemented with a consecutive if that checks the opposite.) If the keyword of the branch is If then you're done after executing the branch but if it is while you execute the branch again.
+*)
