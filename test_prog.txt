@@ -1,0 +1,1 @@
+34 35 >= if 10 print else 20 print end
