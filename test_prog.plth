@@ -1,17 +1,16 @@
-proc syr
-    dup 2 divmod drop
-    1 = if
-        3 * 1 +
-    else
-        dup 2 divmod swap drop swap drop
+proc N 100 procend
+
+proc greater_than_zero dup 0 >= procend
+
+proc console_log dup print procend
+
+proc main
+    N
+    while greater_than_zero do
+        console_log 1 - 
     end
+    drop
 procend
 
-proc N 200 procend
+main
 
-N
-while dup 1 != do
-    dup print
-    syr
-end
-print

@@ -292,7 +292,7 @@ let ga_not (s : prog_token stack) : prog_token stack =
 ;;
 
 let is_int (s: string): bool =
-  let numerals = ['1'; '2'; '3'; '4'; '5'; '6'; '7'; '8'; '9'; '0'] in
+  let numerals = ['-'; '1'; '2'; '3'; '4'; '5'; '6'; '7'; '8'; '9'; '0'] in
   if String.length s = 0 then false
   else (
     let c = s.[0] in
@@ -499,7 +499,7 @@ let get_prog_from_file (filename : string) : string list =
     !res
 ;;
 
-let string_l = get_prog_from_file "test_prog.plth";;
+let string_l = get_prog_from_file "recursion.plth";;
 let tok_l = get_tok_l string_l;;
 let p, proc_array, name_array = create_program_tree tok_l;;
 let s = eval_program p proc_array name_array;;

@@ -1,11 +1,17 @@
-5
-while dup 1 != do
-    dup print
+proc syr
     dup 2 divmod drop
     1 = if
         3 * 1 +
     else
         dup 2 divmod swap drop swap drop
     end
+procend
+
+proc N 200 procend
+
+N
+while dup 1 != do
+    dup print
+    syr
 end
 print
