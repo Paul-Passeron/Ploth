@@ -1,5 +1,16 @@
-34 35 >= if
-    36 37 <= if
-        10 print
+true if
+    1 print
+    false if
+        2 print
+    else
+        3 print
+    end
+end
+false if
+    4 print
+    false if
+        5 print
+    else
+        6 print
     end
 end
