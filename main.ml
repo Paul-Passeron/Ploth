@@ -11,10 +11,8 @@ type keyword =
   | Else
   | While
   | End
+  | Do
 
-type sub_type =
-  | Cond
-  | Main
 
 type arithmetic =
   | Plus
@@ -44,25 +42,34 @@ type prog_token =
   | Gate of gate
   | Keyword of keyword
   | Int of int
-  | Bool of bool
+  | Bool of bool;;
+
+type program =
+  | Exp of prog_token
+  | Sub of sub_type * subprogram * subprogram * bool
+and subprogram = program list
+and sub_type =
+  | Cond
+  | Loop of subprogram
+  | Main;;
 
 type 'a stack =
   | Empty
-  | Node of 'a * 'a stack
+  | Node of 'a * 'a stack;;
 
-let push (elem : 'a) (s : 'a stack) : 'a stack = Node (elem, s)
+let push (elem : 'a) (s : 'a stack) : 'a stack = Node (elem, s);;
+
+let rec get_stack_len (s: 'a stack) = match s with
+  | Node(_, a) -> 1+get_stack_len a
+  | Empty -> 0;;
+
+
 
 let pop (s : 'a stack) : 'a * 'a stack =
   match s with
   | Empty -> failwith "Can't pop an empty stack."
   | Node (a, s) -> a, s
 ;;
-
-type program =
-  | Exp of prog_token
-  | Sub of sub_type * subprogram * subprogram * bool
-
-and subprogram = program list
 
 let human (t : prog_token) : string =
   match t with
@@ -88,6 +95,7 @@ let human (t : prog_token) : string =
   | Intrinsic Swap -> "`swap` intrinsic"
   | Intrinsic Drop -> "`drop` intrinsic"
   | Intrinsic Over -> "`over` intrinsic"
+  |_ -> failwith "TODO: not implemented yet."
 ;;
 
 let print_bool b =
@@ -159,7 +167,8 @@ let in_print (s : prog_token stack) : prog_token stack =
   let elem, s1 = pop s in
   (match elem with
   | Int a -> print_int a
-  | Bool a -> print_bool a);
+  | Bool a -> print_bool a
+  | _ -> failwith "TODO: only supported types are `int` and `bool` types.");
   print_endline "";
   s1
 ;;
@@ -272,8 +281,10 @@ let ga_and (s : prog_token stack) : prog_token stack =
 ;;
 
 let ga_not (s : prog_token stack) : prog_token stack =
-  let Bool a, s1 = pop s in
-  push (Bool (not a)) s1
+  let a, s1 = pop s in
+  match a with
+     |Bool b -> push (Bool (not b)) s1
+     | _ -> failwith "Expected `bool` type for `not` gate."
 ;;
 
 let get_tok_l (l : string list) : prog_token list =
@@ -304,6 +315,8 @@ let get_tok_l (l : string list) : prog_token list =
     | "||" :: q -> Gate Or :: aux q
     | "if" :: q -> Keyword If :: aux q
     | "else" :: q -> Keyword Else :: aux q
+    | "while" :: q -> Keyword While :: aux q
+    | "do" :: q -> Keyword Do :: aux q
     | "end" :: q -> Keyword End :: aux q
     | e :: q -> Int (int_of_string e) :: aux q
   in
@@ -314,15 +327,13 @@ let create_program_tree (tok_l : prog_token list) : program =
   let rec aux (tok_l : prog_token list) (s : program stack) : program =
     match tok_l with
     | [] ->
-      let p, s1 = pop s in
-      let () =
-        match s with
-        | Empty -> ()
-        | _ -> ()
-        (*failwith "Expected stack to be empty") *)
-      in
-      p
+      let p, s1 = pop s in p
     | Keyword If :: q -> aux q (push (Sub (Cond, [], [], false)) s)
+    | Keyword While :: q -> aux q (push (Sub (Main, [], [], false)) s)
+    | Keyword Do :: q ->
+      let condition, s1 = pop s in
+      let new_head = Sub (Loop ([condition]), [], [], false) in
+      aux q (push new_head s1)
     | Keyword Else :: q ->
       let p, s1 = pop s in
       let sub =
@@ -336,8 +347,8 @@ let create_program_tree (tok_l : prog_token list) : program =
       let p, s1 = pop s in
       let () =
         match p with
-        | Sub (Main, _, _, _) -> failwith "`end` keyword can only close `if-else` blocks."
-        | _ -> ()
+        | Sub ((Cond | Loop _), _, _, _) -> ()
+        | _ -> failwith "`end` keyword can only close `if-else`  and `while` blocks."
       in
       let new_head, s2 = pop s1 in
       let h =
@@ -363,7 +374,7 @@ let create_program_tree (tok_l : prog_token list) : program =
 ;;
 
 let eval_program (p : program) : prog_token stack =
-  let rec aux p acc =
+  let rec aux p  acc =
     match p with
     | [] -> acc
     | Exp (Arithmetic Plus) :: q -> aux q (ar_plus acc)
@@ -395,9 +406,16 @@ let eval_program (p : program) : prog_token stack =
         | Bool true -> aux if_branch s1
         | Bool false -> aux else_branch s1
         | _ ->
-          failwith "Expected `bool` type as head of the stack before `if-else` block."
-      in
-      aux q new_stack
+          failwith "Expected `bool` type as head of the stack before `if-else`block."
+        in
+        aux q new_stack
+    | Sub (Loop condition, prog, _, _)::q ->
+        let s1 = aux condition acc in
+        let tok, s2 = pop s1 in
+        match tok with
+          | Bool true -> let new_stack = aux prog s2 in aux p new_stack
+          | Bool false -> aux q s2
+          | _ -> failwith "Expected `bool` type as head of the stack before `while` block."
   in
   match p with
   | Sub (Main, a, _, _) -> aux a Empty
@@ -426,7 +444,7 @@ let get_prog_from_file (filename : string) : string list =
     !res
 ;;
 
-let string_l = get_prog_from_file "test_prog.txt"
-let tok_l = get_tok_l string_l
-let p = create_program_tree tok_l
-let s = eval_program p
+let string_l = get_prog_from_file "test_prog.plth";;
+let tok_l = get_tok_l string_l;;
+let p = create_program_tree tok_l;;
+let s = eval_program p;;

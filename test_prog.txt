@@ -1,6 +1,0 @@
-true if
-    35
-else
-    50
-end
-35 <= if 500 print end

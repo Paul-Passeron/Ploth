@@ -1,0 +1,11 @@
+5
+while dup 1 != do
+    dup print
+    dup 2 divmod drop
+    1 = if
+        3 * 1 +
+    else
+        dup 2 divmod swap drop swap drop
+    end
+end
+print
