@@ -473,7 +473,11 @@ let eval_program (p : program) proc_array name_array: prog_token stack =
           | _ -> failwith "Expected `bool` type as head of the stack before `while` block."
   in
   match p with
-  | Sub (Main, a, _, _) -> aux a Empty
+  | Sub (Main, a, _, _) ->
+    let s = aux a Empty in
+    match s with
+      | Empty -> aux a Empty
+      | _ -> failwith "Unhandled elements on the stack"
   | _ -> failwith "Syntax error."
 ;;
 

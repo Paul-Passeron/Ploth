@@ -4,4 +4,22 @@ proc rec
         -1 + rec
     end
 procend
-10 rec
+
+
+proc fact
+    dup 2 >= if
+        dup -1 + fact *
+    end
+procend
+
+proc N 10 procend
+
+proc main
+    N while dup 0 >= do
+        dup fact print
+        -1 +
+    end drop
+procend
+
+main 
+
