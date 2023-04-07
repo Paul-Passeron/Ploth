@@ -1,16 +1,6 @@
 true if
-    1 print
-    false if
-        2 print
-    else
-        3 print
-    end
+    35
+else
+    50
 end
-false if
-    4 print
-    false if
-        5 print
-    else
-        6 print
-    end
-end
+35 <= if 500 print end
