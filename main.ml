@@ -9,8 +9,11 @@ type intrinsic =
 type keyword = 
   | If
   | Else
-  | End
-  | Begin;;
+  | End;;
+
+type sub_type = 
+  | Cond
+  | Main;;
 
 type arithmetic =
   | Plus
@@ -53,11 +56,10 @@ let pop (s: 'a stack): 'a * 'a stack = match s with
   | Node(a,s) -> a, s;;
 
   
-type 'a prog_elem =
-  | Op of prog_token
-  | Branch of 'a branch
-and 'a prog = ('a prog_elem) list
-and 'a branch = 'a * 'a prog;;
+type program = 
+  | Exp of prog_token
+  | Sub of sub_type * (subprogram) * (subprogram) * bool
+and  subprogram = program list;;
 
 let human (t: prog_token): string = match t with
   | Int(_) -> "`integer`"
@@ -83,15 +85,7 @@ let human (t: prog_token): string = match t with
   | Intrinsic(Drop) -> "`drop` intrinsic"
   | Intrinsic(Over) -> "`over` intrinsic";;
 
-type branch_identifier = keyword;;
 
-let append_branch elem br = match br with
-  | Branch(b, li) -> Branch(b, li@[elem])
-  | _ -> failwith "Object is not branch";;
-(*
-let main_branch = Branch(true, [Op(Int(1)); Op(Int(2)); Op(Arithmetic(Plus)); Op(Bool(true)); Branch(false, ([Op(Intrinsic(Print))]))]);;
-append_branch (Op(Int(10))) main_branch;;
-*)
 let print_bool b = match b with
   | true -> print_string "true"
   | _ -> print_string "false";;
@@ -231,54 +225,23 @@ let co_neq (s: prog_token stack): prog_token stack =
     | Bool(b), Bool(a) -> push (Bool(a <> b)) s2
     | _, _ -> failwith (compiler_message_error_exp cons_a cons_b);;
 
-let parse_prog (p: 'a prog): prog_token stack = 
-  let rec aux p acc = match p with
-    | [] -> acc
-    | Op(Arithmetic(Plus))::q -> aux q (ar_plus acc)
-    | Op(Arithmetic(Minus))::q -> aux q (ar_minus acc)
-    | Op(Arithmetic(Mult))::q -> aux q (ar_mult acc)
-    | Op(Arithmetic(Divmod))::q -> aux q (ar_divmod acc)
-    | Op(Arithmetic(Max))::q -> aux q (ar_max acc)
-    | Op(Intrinsic(Drop))::q -> aux q (in_drop acc)
-    | Op(Intrinsic(Print))::q -> aux q (in_print acc)
-    | Op(Intrinsic(Dup))::q -> aux q (in_dup acc)
-    | Op(Intrinsic(Swap))::q -> aux q (in_swap acc)
-    | Op(Intrinsic(Over))::q -> aux q (in_over acc)
-    | Op(Intrinsic(Rot))::q -> aux q (in_rot acc)
-    | Op(Comparator(Geq))::q -> aux q (co_geq acc)
-    | Op(Comparator(G))::q -> aux q (co_g acc)
-    | Op(Comparator(Leq))::q -> aux q (co_leq acc)
-    | Op(Comparator(L))::q -> aux q (co_l acc)
-    | Op(Comparator(Eq))::q -> aux q (co_eq acc)
-    | Op(Comparator(Neq))::q -> aux q (co_neq acc)
-    | Op(Gate(Or))::q -> (
-      let Bool(b), s1 = pop acc in
-      let Bool(a), s2 = pop s1 in
-      aux q (push (Bool(a||b)) s2))
-    | Op(Gate(And))::q -> (
-      let Bool(b), s1 = pop acc in
-      let Bool(a), s2 = pop s1 in
-      aux q (push (Bool(a&&b)) s2))
-    | Op(Gate(Not))::q -> (
-      let Bool(a), s1 = pop acc in
-      aux q (push (Bool(not a)) s1))
-    | Op(e)::q -> aux q (push e acc) in
-  aux p Empty;;
+let ga_or (s: prog_token stack): prog_token stack =
+  let b, s1 = pop s in
+  let a, s2 = pop s1 in
+  match a, b with
+    |Bool(a'), Bool(b') -> push (Bool(a'||b')) s2
+    | _ -> failwith "expected bool but found int";;
 
-let splice_line (s: string): string list =
-  let l = String.split_on_char ' ' (String.trim s) in
-  match l with
-    | [""] -> []
-    | l -> l;;
+let ga_and (s: prog_token stack): prog_token stack =
+  let b, s1 = pop s in
+  let a, s2 = pop s1 in
+  match a, b with
+    |Bool(a'), Bool(b') -> push (Bool(a'&&b')) s2
+    | _ -> failwith "expected bool but found int";;
 
-let get_prog_from_file (filename: string): string list =
-  let res = ref [] in 
-  let ic = open_in filename in
-  try while true; do
-    let line = input_line ic in
-    res := !res@(splice_line line); done;!res
-  with End_of_file -> close_in ic;
-  !res;;
+let ga_not (s: prog_token stack): prog_token stack =
+  let Bool(a), s1 = pop s in
+  push (Bool(not a)) s1;;
 
 
 let get_tok_l (l: string list): prog_token list =
@@ -312,29 +275,93 @@ let get_tok_l (l: string list): prog_token list =
     | e::q -> Int(int_of_string e)::(aux q) in
   aux l;;
 
-(*On prend en entree une liste qui commence par If et qui compprte un End*)
-let rec get_code_if_else tok_l : (keyword prog_elem * prog_token list)=
-  let rec aux (l: prog_token list) (acc: keyword prog_elem):
-  (keyword prog_elem * prog_token list)= match l with
-    | Keyword End::q -> acc, q
-    | Keyword If::q ->
-        let block, rest = get_code_if_else q in
-        (append_branch block acc), rest
-    | e::q -> aux q (append_branch (Op(e)) acc)
-    | [] -> failwith "`if` blocks should always be closed with `end` keyword." in
-  aux tok_l (Branch(If, []));;
+let create_program_tree (tok_l: prog_token list): program =
+    
+  let rec aux (tok_l: prog_token list) (s: program stack): program = match tok_l with
+  | [] ->
+    let p, s1 = pop s in
+    let () = (match s with
+      | Empty -> ()
+      | _ -> () (*failwith "Expected stack to be empty") *))in
+    p
+  | Keyword If::q -> aux q (push (Sub (Cond, [], [], false)) s)
+  | Keyword Else::q ->
+    let p, s1 = pop s in
+    let sub = match p with
+      | Sub (Cond, if_branch, else_branch, false) -> Sub(Cond, if_branch, else_branch, true)
+      | _ -> failwith "Syntax Error" in
+    aux q (push sub s1)
+  | Keyword End::q ->
+      let p, s1 = pop s in
+      let () = match p with
+        | Sub (Main, _, _, _) -> failwith "`end` keyword can only close `if-else` blocks."
+        | _ -> () in
+      let new_head, s2 = pop s1 in
+      let h = match new_head with
+        | Sub(a, b, c, false) -> Sub(a,b@[p],c,false)
+        | Sub(a, b, c, true) -> Sub(a,b,c@[p],true)
+        | Exp tok -> Sub (Main, [Exp tok; p], [], false) in
+      aux q (push h s2) 
+  | token::q ->
+    let p, s1 = pop s in 
+    let sub = (match p with
+      | Sub (t, if_branch, else_branch, false) -> Sub (t, if_branch@[Exp token], else_branch, false)
+      | Sub (Cond, if_branch, else_branch, true) -> Sub (Cond, if_branch, else_branch@[Exp token], true)
+      | _ -> failwith "Syntax Error")in
+      aux q (push sub s1) in
+  aux tok_l (Node (Sub (Main, [], [], false), Empty));;
 
-let parse_prog (tok_l: prog_token list): keyword prog =
-  let code, rest = get_code_if_else tok_l in
-  match code with
-    | Branch(If, b) -> [Branch(Begin, b)]
-    | _ -> failwith "";;
+let parse_prog (p: keyword prog): prog_token stack = 
+  let rec aux p acc = match p with
+    | [] -> acc
+    | Op(Arithmetic(Plus))::q -> aux q (ar_plus acc)
+    | Op(Arithmetic(Minus))::q -> aux q (ar_minus acc)
+    | Op(Arithmetic(Mult))::q -> aux q (ar_mult acc)
+    | Op(Arithmetic(Divmod))::q -> aux q (ar_divmod acc)
+    | Op(Arithmetic(Max))::q -> aux q (ar_max acc)
+    | Op(Intrinsic(Drop))::q -> aux q (in_drop acc)
+    | Op(Intrinsic(Print))::q -> aux q (in_print acc)
+    | Op(Intrinsic(Dup))::q -> aux q (in_dup acc)
+    | Op(Intrinsic(Swap))::q -> aux q (in_swap acc)
+    | Op(Intrinsic(Over))::q -> aux q (in_over acc)
+    | Op(Intrinsic(Rot))::q -> aux q (in_rot acc)
+    | Op(Comparator(Geq))::q -> aux q (co_geq acc)
+    | Op(Comparator(G))::q -> aux q (co_g acc)
+    | Op(Comparator(Leq))::q -> aux q (co_leq acc)
+    | Op(Comparator(L))::q -> aux q (co_l acc)
+    | Op(Comparator(Eq))::q -> aux q (co_eq acc)
+    | Op(Comparator(Neq))::q -> aux q (co_neq acc)
+    | Op(Gate(Or))::q -> aux q (ga_or acc)
+    | Op(Gate(And))::q -> aux q (ga_and acc)
+    | Op(Gate(Not))::q -> aux q (ga_not acc)
+    | Op(e)::q -> aux q (push e acc)
+    | Branch(If, sub_prog)::q -> br_if acc q sub_prog
+  and br_if (s: prog_token stack) rest sub_prog : prog_token stack =
+    let elem, s1 = pop s in match elem with
+      | Bool(true) -> let s2 = aux sub_prog s1 in aux rest s2
+      | Bool(_) -> aux rest s1
+      | _ -> failwith "Expected to find `bool` type as condition for if block but found `int` type instead." in
+  aux p Empty;;
+
+let splice_line (s: string): string list =
+  let l = String.split_on_char ' ' (String.trim s) in
+  match l with
+    | [""] -> []
+    | l -> l;;
+
+let get_prog_from_file (filename: string): string list =
+  let res = ref [] in 
+  let ic = open_in filename in
+  try while true; do
+    let line = input_line ic in
+    res := !res@(splice_line line); done;!res
+  with End_of_file -> close_in ic;
+  !res;;
+
 
 let string_l = get_prog_from_file "test_prog.txt";;
 let tok_l = get_tok_l string_l;;
-let if_else, other = get_code_if_else tok_l;;
-if_else;;
-let parsed = parse_prog tok_l;;
+let p = create_program_tree tok_l;;
 (*
 While and if will work pretty much the same -> pop the stack and get a boolean (should throw an exception if it's something else) and execute the branch or not (for the moment there is no else but it can be implemented with a consecutive if that checks the opposite.) If the keyword of the branch is If then you're done after executing the branch but if it is while you execute the branch again.
 *)
