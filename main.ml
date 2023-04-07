@@ -12,6 +12,8 @@ type keyword =
   | While
   | End
   | Do
+  | Proc
+  | ProcEnd
 
 
 type arithmetic =
@@ -42,7 +44,9 @@ type prog_token =
   | Gate of gate
   | Keyword of keyword
   | Int of int
-  | Bool of bool;;
+  | Bool of bool
+  | Identifier of string
+;;
 
 type program =
   | Exp of prog_token
@@ -287,6 +291,14 @@ let ga_not (s : prog_token stack) : prog_token stack =
      | _ -> failwith "Expected `bool` type for `not` gate."
 ;;
 
+let is_int (s: string): bool =
+  let numerals = ['1'; '2'; '3'; '4'; '5'; '6'; '7'; '8'; '9'; '0'] in
+  if String.length s = 0 then false
+  else (
+    let c = s.[0] in
+    List.exists (fun a -> a = c) numerals;
+  );;
+
 let get_tok_l (l : string list) : prog_token list =
   let rec aux l =
     match l with
@@ -318,22 +330,47 @@ let get_tok_l (l : string list) : prog_token list =
     | "while" :: q -> Keyword While :: aux q
     | "do" :: q -> Keyword Do :: aux q
     | "end" :: q -> Keyword End :: aux q
-    | e :: q -> Int (int_of_string e) :: aux q
+    | "proc" :: q -> Keyword Proc :: aux q
+    | "procend" :: q -> Keyword ProcEnd :: aux q 
+    | e :: q when is_int e -> Int (int_of_string e) :: aux q
+    | e :: q -> Identifier e :: aux q
   in
   aux l
 ;;
 
-let create_program_tree (tok_l : prog_token list) : program =
-  let rec aux (tok_l : prog_token list) (s : program stack) : program =
+let get_proc_tokens tok_l =
+  let rec aux l acc = match l with
+    | Keyword ProcEnd :: q -> acc, q
+    | tok :: q -> aux q (acc@[tok])
+    | [] -> failwith "Procedures should always be closed with `procend` keyword." in
+  aux tok_l [];;
+
+let get_proc_id name name_array =
+  let n = Array.length name_array in
+  let res = ref (-1) in
+  for i = 0 to n-1 do
+    if name_array.(i) = name then res := i;
+  done;
+  match !res with
+    | -1 -> failwith ("`"^name^"`"^" procedure used before declaration.")
+    | _ -> !res;;
+
+
+let create_program_tree (tok_l : prog_token list) =
+  let max_proc_count = 100 in
+  let proc_array: subprogram array = Array.make max_proc_count [] in
+  let name_array: string array = Array.make max_proc_count "" in
+  let proc_count = ref 0 in
+  let rec aux (tok_l : prog_token list) (s : program stack) (proc_flag: bool): program =
     match tok_l with
     | [] ->
       let p, s1 = pop s in p
-    | Keyword If :: q -> aux q (push (Sub (Cond, [], [], false)) s)
-    | Keyword While :: q -> aux q (push (Sub (Main, [], [], false)) s)
+    | Keyword If :: q -> aux q (push (Sub (Cond, [], [], false)) s) proc_flag
+    | Keyword While :: q -> aux q (push (Sub (Main, [], [], false)) s) proc_flag
     | Keyword Do :: q ->
       let condition, s1 = pop s in
       let new_head = Sub (Loop ([condition]), [], [], false) in
-      aux q (push new_head s1)
+      aux q (push new_head s1) proc_flag
     | Keyword Else :: q ->
       let p, s1 = pop s in
       let sub =
@@ -342,7 +379,7 @@ let create_program_tree (tok_l : prog_token list) : program =
           Sub (Cond, if_branch, else_branch, true)
         | _ -> failwith "Syntax Error"
       in
-      aux q (push sub s1)
+      aux q (push sub s1) proc_flag
     | Keyword End :: q ->
       let p, s1 = pop s in
       let () =
@@ -357,7 +394,21 @@ let create_program_tree (tok_l : prog_token list) : program =
         | Sub (a, b, c, true) -> Sub (a, b, c @ [ p ], true)
         | Exp tok -> Sub (Main, [ Exp tok; p ], [], false)
       in
-      aux q (push h s2)
+      aux q (push h s2) proc_flag
+    | Keyword Proc :: Identifier proc_name :: q ->
+      let () = match proc_flag with
+        | true -> failwith "Cannot create a procedure inside of a procedure."
+        | _ -> () in
+      name_array.(!proc_count) <- proc_name;
+      let proc_tok_l, rest = get_proc_tokens q in
+      let proc_content = aux proc_tok_l (Node (Sub (Main, [], [], false), Empty)) true in
+      let content = (match proc_content with
+        | Sub (_, l, _, _) -> l
+        | _ -> failwith "Syntax error") in
+      proc_array.(!proc_count) <- content;
+      incr proc_count;
+      aux rest s false;
+    | Keyword ProcEnd :: q -> let p, s1 = pop s in p
     | token :: q ->
       let p, s1 = pop s in
       let sub =
@@ -368,12 +419,12 @@ let create_program_tree (tok_l : prog_token list) : program =
           Sub (Cond, if_branch, else_branch @ [ Exp token ], true)
         | _ -> failwith "Syntax Error"
       in
-      aux q (push sub s1)
+      aux q (push sub s1) proc_flag
   in
-  aux tok_l (Node (Sub (Main, [], [], false), Empty))
+  ((aux tok_l (Node (Sub (Main, [], [], false), Empty)) false), proc_array, name_array)
 ;;
 
-let eval_program (p : program) : prog_token stack =
+let eval_program (p : program) proc_array name_array: prog_token stack =
   let rec aux p  acc =
     match p with
     | [] -> acc
@@ -397,6 +448,10 @@ let eval_program (p : program) : prog_token stack =
     | Exp (Gate Or) :: q -> aux q (ga_or acc)
     | Exp (Gate And) :: q -> aux q (ga_and acc)
     | Exp (Gate Not) :: q -> aux q (ga_not acc)
+    | Exp (Identifier proc_name) :: q ->
+      let proc_id = get_proc_id proc_name name_array in
+      let proc_prog = proc_array.(proc_id) in
+      aux (proc_prog@q) acc; 
     | Exp e :: q -> aux q (push e acc)
     | Sub (Main, a, _, _) :: q -> aux q (aux a acc)
     | Sub (Cond, if_branch, else_branch, _) :: q ->
@@ -446,5 +501,5 @@ let get_prog_from_file (filename : string) : string list =
 
 let string_l = get_prog_from_file "test_prog.plth";;
 let tok_l = get_tok_l string_l;;
-let p = create_program_tree tok_l;;
-let s = eval_program p;;
+let p, proc_array, name_array = create_program_tree tok_l;;
+let s = eval_program p proc_array name_array;;
