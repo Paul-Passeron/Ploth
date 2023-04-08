@@ -1,16 +1,23 @@
 proc N 100 procend
 
-proc greater_than_zero dup 0 >= procend
-
-proc console_log dup print procend
-
-proc main
-    N
-    while greater_than_zero do
-        console_log 1 - 
-    end
-    drop
+proc print_new_line
+    "
+    " print
 procend
 
-main
+proc print_string_n_times
+    dup 0 != if
+        over print -1 + print_string_n_times
+    else
+        drop drop
+    end
+procend
 
+proc main
+    0
+    while dup N <= do
+        dup "0" over print_string_n_times
+        print_new_line
+        dup 1 +
+    end
+procend

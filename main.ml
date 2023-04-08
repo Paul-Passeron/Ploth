@@ -45,6 +45,7 @@ type prog_token =
   | Keyword of keyword
   | Int of int
   | Bool of bool
+  | Str of string
   | Identifier of string
 ;;
 
@@ -172,8 +173,8 @@ let in_print (s : prog_token stack) : prog_token stack =
   (match elem with
   | Int a -> print_int a
   | Bool a -> print_bool a
+  | Str a -> print_string a
   | _ -> failwith "TODO: only supported types are `int` and `bool` types.");
-  print_endline "";
   s1
 ;;
 
@@ -299,6 +300,11 @@ let is_int (s: string): bool =
     List.exists (fun a -> a = c) numerals;
   );;
 
+let is_str (s: string): bool =
+    if String.length s = 0 then false
+    else '\"' = s.[0];;
+
+
 let get_tok_l (l : string list) : prog_token list =
   let rec aux l =
     match l with
@@ -333,6 +339,7 @@ let get_tok_l (l : string list) : prog_token list =
     | "proc" :: q -> Keyword Proc :: aux q
     | "procend" :: q -> Keyword ProcEnd :: aux q 
     | e :: q when is_int e -> Int (int_of_string e) :: aux q
+    | e :: q when is_str e -> let n = String.length e in Str (String.sub e 1 (n-2)) :: aux q
     | e :: q -> Identifier e :: aux q
   in
   aux l
@@ -424,7 +431,7 @@ let create_program_tree (tok_l : prog_token list) =
   ((aux tok_l (Node (Sub (Main, [], [], false), Empty)) false), proc_array, name_array)
 ;;
 
-let eval_program (p : program) proc_array name_array: prog_token stack =
+let eval_program (p : program) proc_array name_array =
   let rec aux p  acc =
     match p with
     | [] -> acc
@@ -473,11 +480,7 @@ let eval_program (p : program) proc_array name_array: prog_token stack =
           | _ -> failwith "Expected `bool` type as head of the stack before `while` block."
   in
   match p with
-  | Sub (Main, a, _, _) ->
-    let s = aux a Empty in
-    match s with
-      | Empty -> aux a Empty
-      | _ -> failwith "Unhandled elements on the stack"
+  | Sub (Main, a, _, _) -> aux a Empty
   | _ -> failwith "Syntax error."
 ;;
 
@@ -487,6 +490,34 @@ let splice_line (s : string) : string list =
   | [ "" ] -> []
   | l -> l
 ;;
+
+let rec discard_comments li = match li with
+  | [] -> []
+  | '/'::'/'::_ -> []
+  | e::q -> e::(discard_comments q);;
+
+let get_list_of_chars (s: string): char list =
+  let n = String.length s in
+  let res = ref [] in
+  for i = 0 to n-1 do
+    res := !res@[s.[i]];
+  done;
+  !res;;
+  
+
+let get_char_list_from_file (filename: string): char list =
+  let res = ref [] in
+  let ic = open_in filename in
+  let () = try
+      while true do
+        let line = input_line ic in
+        let li = discard_comments (get_list_of_chars line) in
+        res := !res@('\n'::li);
+      done;
+    with
+      | End_of_file -> close_in ic; in
+    !res;;
+
 
 let get_prog_from_file (filename : string) : string list =
   let res = ref [] in
@@ -503,7 +534,36 @@ let get_prog_from_file (filename : string) : string list =
     !res
 ;;
 
-let string_l = get_prog_from_file "recursion.plth";;
-let tok_l = get_tok_l string_l;;
-let p, proc_array, name_array = create_program_tree tok_l;;
-let s = eval_program p proc_array name_array;;
+
+let get_string_of_char = String.make 1;;
+
+let get_list_of_unprocessed_tokens l = 
+  let rec aux l li_acc st_acc st_flag = match l with
+    | '\"'::q when st_flag = false -> aux q li_acc (get_string_of_char '\"') true
+    | '\"'::q -> aux q (li_acc@[st_acc^(get_string_of_char '\"')]) "" false
+    | '\n'::q when st_flag = false -> aux q (li_acc@[st_acc]) "" false
+    | ' ' ::q when st_flag = false -> aux q (li_acc@[st_acc]) "" false
+    | e::q -> aux q li_acc (st_acc^(get_string_of_char e)) st_flag
+    | [] -> li_acc@[st_acc] in
+  let rec aux2 l = match l with
+    | ""::q -> aux2 q
+    | e::q -> e::aux2 q
+    | [] -> [] in
+  let l1 = aux l [] "" false in
+  aux2 l1;;
+
+let get_string_list_from_file filename =
+  let l = get_char_list_from_file filename in
+  get_list_of_unprocessed_tokens l;;
+
+let get_basic_main_prog () = 
+  Sub (Main, [Exp (Identifier "main")], [], false);;
+
+let interpret_file (filename: string) =
+  let string_l = get_string_list_from_file filename in
+  let tok_l = get_tok_l string_l in
+  let _, proc_array, name_array = create_program_tree tok_l in
+  let _ = eval_program (get_basic_main_prog ()) proc_array name_array in ();;
+
+interpret_file "test_prog.plth";;
+
