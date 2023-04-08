@@ -1,0 +1,12 @@
+proc print_new_line
+    "
+    " print
+procend
+
+proc print_string_n_times
+    dup 0 != if
+        over print -1 + print_string_n_times
+    else
+        drop drop
+    end
+procend

@@ -1,17 +1,7 @@
-proc N 100 procend
+include "std_lib.plth"
 
-proc print_new_line
-    "
-    " print
-procend
+proc N 10 procend
 
-proc print_string_n_times
-    dup 0 != if
-        over print -1 + print_string_n_times
-    else
-        drop drop
-    end
-procend
 
 proc main
     0
@@ -21,3 +11,4 @@ proc main
         dup 1 +
     end
 procend
+

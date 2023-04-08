@@ -14,6 +14,7 @@ type keyword =
   | Do
   | Proc
   | ProcEnd
+  | Include
 
 
 type arithmetic =
@@ -337,13 +338,69 @@ let get_tok_l (l : string list) : prog_token list =
     | "do" :: q -> Keyword Do :: aux q
     | "end" :: q -> Keyword End :: aux q
     | "proc" :: q -> Keyword Proc :: aux q
-    | "procend" :: q -> Keyword ProcEnd :: aux q 
+    | "procend" :: q -> Keyword ProcEnd :: aux q
+    | "include" :: q -> Keyword Include :: aux q
     | e :: q when is_int e -> Int (int_of_string e) :: aux q
     | e :: q when is_str e -> let n = String.length e in Str (String.sub e 1 (n-2)) :: aux q
     | e :: q -> Identifier e :: aux q
   in
   aux l
 ;;
+
+
+
+
+
+let get_string_of_char = String.make 1;;
+
+let get_list_of_unprocessed_tokens l = 
+  let rec aux l li_acc st_acc st_flag = match l with
+    | '\"'::q when st_flag = false -> aux q li_acc (get_string_of_char '\"') true
+    | '\"'::q -> aux q (li_acc@[st_acc^(get_string_of_char '\"')]) "" false
+    | '\n'::q when st_flag = false -> aux q (li_acc@[st_acc]) "" false
+    | ' ' ::q when st_flag = false -> aux q (li_acc@[st_acc]) "" false
+    | e::q -> aux q li_acc (st_acc^(get_string_of_char e)) st_flag
+    | [] -> li_acc@[st_acc] in
+  let rec aux2 l = match l with
+    | ""::q -> aux2 q
+    | e::q -> e::aux2 q
+    | [] -> [] in
+  let l1 = aux l [] "" false in
+  aux2 l1;;
+
+
+
+let rec discard_comments li = match li with
+  | [] -> []
+  | '/'::'/'::_ -> []
+  | e::q -> e::(discard_comments q);;
+
+let get_list_of_chars (s: string): char list =
+  let n = String.length s in
+  let res = ref [] in
+  for i = 0 to n-1 do
+    res := !res@[s.[i]];
+  done;
+  !res;;
+  
+
+let get_char_list_from_file (filename: string): char list =
+  let res = ref [] in
+  let ic = open_in filename in
+  let () = try
+      while true do
+        let line = input_line ic in
+        let li = discard_comments (get_list_of_chars line) in
+        res := !res@('\n'::li);
+      done;
+    with
+      | End_of_file -> close_in ic; in
+    !res;;
+
+let get_string_list_from_file filename =
+  let l = get_char_list_from_file filename in
+  get_list_of_unprocessed_tokens l;;
+
 
 let get_proc_tokens tok_l =
   let rec aux l acc = match l with
@@ -362,8 +419,25 @@ let get_proc_id name name_array =
     | -1 -> failwith ("`"^name^"`"^" procedure used before declaration.")
     | _ -> !res;;
 
+let get_proc_count name_arr =
+  let res = ref 0 in
+  let flag = ref true in
+  while !flag do
+    if name_arr.(!res) = "" then flag := false
+    else incr res; 
+  done;
+  !res;;
 
-let create_program_tree (tok_l : prog_token list) =
+
+let update_proc_with_include proc_arr name_arr inc_proc_arr inc_name_arr =
+  let proc_count = get_proc_count name_arr in
+  let inc_proc_count = get_proc_count inc_name_arr in
+  for i = 0 to inc_proc_count do
+    proc_arr.(proc_count+i) <- inc_proc_arr.(i);
+    name_arr.(proc_count+i) <- inc_name_arr.(i);
+  done;;
+
+let rec create_program_tree (tok_l : prog_token list) =
   let max_proc_count = 100 in
   let proc_array: subprogram array = Array.make max_proc_count [] in
   let name_array: string array = Array.make max_proc_count "" in
@@ -416,6 +490,16 @@ let create_program_tree (tok_l : prog_token list) =
       incr proc_count;
       aux rest s false;
     | Keyword ProcEnd :: q -> let p, s1 = pop s in p
+    | Keyword Include :: Str include_filename :: q ->
+        let include_file_tree, inc_procs, inc_names = get_prog_tree_from_file include_filename in
+        update_proc_with_include proc_array name_array inc_procs inc_names;
+        proc_count := get_proc_count inc_names;
+        let p, s1 = pop s in
+        let to_push = match p with
+          | Sub(a, b, c, d) -> Sub(a, b@[include_file_tree], c, d)
+          | Exp a -> Sub (Main, [Exp a; include_file_tree], [], false) in
+        aux q (push to_push s1) proc_flag
+    | Keyword Include :: _ -> failwith "Expected file path after `include` keyword."
     | token :: q ->
       let p, s1 = pop s in
       let sub =
@@ -429,6 +513,11 @@ let create_program_tree (tok_l : prog_token list) =
       aux q (push sub s1) proc_flag
   in
   ((aux tok_l (Node (Sub (Main, [], [], false), Empty)) false), proc_array, name_array)
+
+and get_prog_tree_from_file (filename: string) = 
+  let string_l = get_string_list_from_file filename in
+  let tok_l = get_tok_l string_l in
+  create_program_tree tok_l
 ;;
 
 let eval_program (p : program) proc_array name_array =
@@ -484,77 +573,6 @@ let eval_program (p : program) proc_array name_array =
   | _ -> failwith "Syntax error."
 ;;
 
-let splice_line (s : string) : string list =
-  let l = String.split_on_char ' ' (String.trim s) in
-  match l with
-  | [ "" ] -> []
-  | l -> l
-;;
-
-let rec discard_comments li = match li with
-  | [] -> []
-  | '/'::'/'::_ -> []
-  | e::q -> e::(discard_comments q);;
-
-let get_list_of_chars (s: string): char list =
-  let n = String.length s in
-  let res = ref [] in
-  for i = 0 to n-1 do
-    res := !res@[s.[i]];
-  done;
-  !res;;
-  
-
-let get_char_list_from_file (filename: string): char list =
-  let res = ref [] in
-  let ic = open_in filename in
-  let () = try
-      while true do
-        let line = input_line ic in
-        let li = discard_comments (get_list_of_chars line) in
-        res := !res@('\n'::li);
-      done;
-    with
-      | End_of_file -> close_in ic; in
-    !res;;
-
-
-let get_prog_from_file (filename : string) : string list =
-  let res = ref [] in
-  let ic = open_in filename in
-  try
-    while true do
-      let line = input_line ic in
-      res := !res @ splice_line line
-    done;
-    !res
-  with
-  | End_of_file ->
-    close_in ic;
-    !res
-;;
-
-
-let get_string_of_char = String.make 1;;
-
-let get_list_of_unprocessed_tokens l = 
-  let rec aux l li_acc st_acc st_flag = match l with
-    | '\"'::q when st_flag = false -> aux q li_acc (get_string_of_char '\"') true
-    | '\"'::q -> aux q (li_acc@[st_acc^(get_string_of_char '\"')]) "" false
-    | '\n'::q when st_flag = false -> aux q (li_acc@[st_acc]) "" false
-    | ' ' ::q when st_flag = false -> aux q (li_acc@[st_acc]) "" false
-    | e::q -> aux q li_acc (st_acc^(get_string_of_char e)) st_flag
-    | [] -> li_acc@[st_acc] in
-  let rec aux2 l = match l with
-    | ""::q -> aux2 q
-    | e::q -> e::aux2 q
-    | [] -> [] in
-  let l1 = aux l [] "" false in
-  aux2 l1;;
-
-let get_string_list_from_file filename =
-  let l = get_char_list_from_file filename in
-  get_list_of_unprocessed_tokens l;;
 
 let get_basic_main_prog () = 
   Sub (Main, [Exp (Identifier "main")], [], false);;
