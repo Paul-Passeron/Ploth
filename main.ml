@@ -121,6 +121,7 @@ let ar_plus (s : prog_token stack) : prog_token stack =
   | Int b, Int a -> push (Int (a + b)) s2
   | _, Int _ -> failwith (compiler_message_error_exp (Int 0) cons_b)
   | Int _, _ -> failwith (compiler_message_error_exp (Int 0) cons_a)
+  | Str st2, Str st1 -> push (Str (st1^st2)) s2
   | _, _ -> failwith (compiler_message_error_exp (Int 0) cons_b)
 ;;
 
@@ -585,3 +586,4 @@ let interpret_file (filename: string) =
 
 interpret_file "test_prog.plth";;
 
+(*if|while|do|end|proc|procend|rot|swap|over|divmod|include|else|print|drop|dup*)

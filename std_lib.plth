@@ -1,6 +1,10 @@
 proc print_new_line
     "
-    " print
+" print
+procend
+
+proc print_endline
+    print print_new_line
 procend
 
 proc print_string_n_times
@@ -8,5 +12,20 @@ proc print_string_n_times
         over print -1 + print_string_n_times
     else
         drop drop
+    end
+procend
+
+proc iter_fact
+    dup
+    while over 1 > do
+        over  -1 + *
+        swap -1 + swap
+    end
+    swap drop
+procend
+
+proc rec_fact
+    dup 2 >= if
+        dup -1 + rec_fact *
     end
 procend

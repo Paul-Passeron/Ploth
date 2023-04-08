@@ -1,14 +1,7 @@
 include "std_lib.plth"
 
-proc N 10 procend
-
-
 proc main
-    0
-    while dup N <= do
-        dup "0" over print_string_n_times
-        print_new_line
-        dup 1 +
-    end
+    "Hello" ", " + "world!" + print_endline
 procend
+
 
