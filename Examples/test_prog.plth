@@ -1,0 +1,25 @@
+include "std_lib.plth"
+
+proc decompose_string
+    dup length -1 +
+    while dup 0 >= do
+        over over -1 * over length -1 + +
+        swap . print_endline
+        -1 +
+    end
+procend
+
+proc pow
+    1
+    over 1 >= if
+        swap -1 +
+        swap
+        
+    end
+procend
+
+proc main
+    "H" "h" = print
+procend
+
+

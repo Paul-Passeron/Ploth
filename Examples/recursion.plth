@@ -20,6 +20,3 @@ proc main
         -1 +
     end drop
 procend
-
-
-main drop

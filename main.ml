@@ -5,6 +5,7 @@ type intrinsic =
   | Rot
   | Drop
   | Over
+  | Length
 
 type keyword =
   | If
@@ -15,6 +16,7 @@ type keyword =
   | Proc
   | ProcEnd
   | Include
+  | Dot
 
 
 type arithmetic =
@@ -101,7 +103,7 @@ let human (t : prog_token) : string =
   | Intrinsic Swap -> "`swap` intrinsic"
   | Intrinsic Drop -> "`drop` intrinsic"
   | Intrinsic Over -> "`over` intrinsic"
-  |_ -> failwith "TODO: not implemented yet."
+  |_ -> ""
 ;;
 
 let print_bool b =
@@ -182,8 +184,7 @@ let in_print (s : prog_token stack) : prog_token stack =
 
 let in_dup (s : prog_token stack) : prog_token stack =
   let a, s1 = pop s in
-  let s2 = push a (push a s1) in
-  s2
+  push a (push a s1)
 ;;
 
 let in_swap (s : prog_token stack) : prog_token stack =
@@ -259,6 +260,7 @@ let co_eq (s : prog_token stack) : prog_token stack =
   match cons_b, cons_a with
   | Int b, Int a -> push (Bool (a = b)) s2
   | Bool b, Bool a -> push (Bool (a = b)) s2
+  | Str str1, Str str2 -> push (Bool (str1 = str2)) s2
   | _, _ -> failwith (compiler_message_error_exp cons_a cons_b)
 ;;
 
@@ -341,6 +343,8 @@ let get_tok_l (l : string list) : prog_token list =
     | "proc" :: q -> Keyword Proc :: aux q
     | "procend" :: q -> Keyword ProcEnd :: aux q
     | "include" :: q -> Keyword Include :: aux q
+    |"." :: q -> Keyword Dot :: aux q
+    | "length" :: q -> Intrinsic Length :: aux q
     | e :: q when is_int e -> Int (int_of_string e) :: aux q
     | e :: q when is_str e -> let n = String.length e in Str (String.sub e 1 (n-2)) :: aux q
     | e :: q -> Identifier e :: aux q
@@ -429,7 +433,18 @@ let get_proc_count name_arr =
   done;
   !res;;
 
-
+let get_global_path (filename: string) =
+  let l = (get_list_of_chars filename) in
+  let last = ref (-1) in
+  let rec aux l acc = match l with
+    | [] -> ()
+    | '/'::q -> last:=acc; aux q (acc+1)
+    | e::q -> aux q (acc+1) in
+  aux l 0;
+  match !last with
+    | -1 -> filename
+    | _ -> (String.sub filename 0 (!last + 1));;
+  
 let update_proc_with_include proc_arr name_arr inc_proc_arr inc_name_arr =
   let proc_count = get_proc_count name_arr in
   let inc_proc_count = get_proc_count inc_name_arr in
@@ -438,7 +453,7 @@ let update_proc_with_include proc_arr name_arr inc_proc_arr inc_name_arr =
     name_arr.(proc_count+i) <- inc_name_arr.(i);
   done;;
 
-let rec create_program_tree (tok_l : prog_token list) =
+let rec create_program_tree (tok_l : prog_token list) filename =
   let max_proc_count = 100 in
   let proc_array: subprogram array = Array.make max_proc_count [] in
   let name_array: string array = Array.make max_proc_count "" in
@@ -492,7 +507,8 @@ let rec create_program_tree (tok_l : prog_token list) =
       aux rest s false;
     | Keyword ProcEnd :: q -> let p, s1 = pop s in p
     | Keyword Include :: Str include_filename :: q ->
-        let include_file_tree, inc_procs, inc_names = get_prog_tree_from_file include_filename in
+        let global_include_filename = (get_global_path filename)^include_filename in
+        let include_file_tree, inc_procs, inc_names = get_prog_tree_from_file global_include_filename filename in
         update_proc_with_include proc_array name_array inc_procs inc_names;
         proc_count := get_proc_count inc_names;
         let p, s1 = pop s in
@@ -515,10 +531,10 @@ let rec create_program_tree (tok_l : prog_token list) =
   in
   ((aux tok_l (Node (Sub (Main, [], [], false), Empty)) false), proc_array, name_array)
 
-and get_prog_tree_from_file (filename: string) = 
+and get_prog_tree_from_file (filename: string) f2 = 
   let string_l = get_string_list_from_file filename in
   let tok_l = get_tok_l string_l in
-  create_program_tree tok_l
+  create_program_tree tok_l f2
 ;;
 
 let eval_program (p : program) proc_array name_array =
@@ -548,7 +564,20 @@ let eval_program (p : program) proc_array name_array =
     | Exp (Identifier proc_name) :: q ->
       let proc_id = get_proc_id proc_name name_array in
       let proc_prog = proc_array.(proc_id) in
-      aux (proc_prog@q) acc; 
+      aux (proc_prog@q) acc;
+    | Exp (Intrinsic Length) :: q ->
+      let p, s1 = pop acc in
+      let to_ret = match p with
+        | Str str -> aux ((Exp (Int (String.length str)))::q) s1
+        | _ -> failwith "Cannot get length of non-string values." in
+      to_ret
+    | Exp (Keyword Dot) :: q ->
+      let p1, s1 = pop acc in
+      let p2, s2 = pop s1 in
+      let to_ret = match p1, p2 with
+        | Str str, Int a -> aux ((Exp (Str (String.make 1 (str.[a]))))::q) s2
+        | _ -> failwith "Invalid arguments for `.`keyword." in
+      to_ret
     | Exp e :: q -> aux q (push e acc)
     | Sub (Main, a, _, _) :: q -> aux q (aux a acc)
     | Sub (Cond, if_branch, else_branch, _) :: q ->
@@ -581,9 +610,7 @@ let get_basic_main_prog () =
 let interpret_file (filename: string) =
   let string_l = get_string_list_from_file filename in
   let tok_l = get_tok_l string_l in
-  let _, proc_array, name_array = create_program_tree tok_l in
+  let _, proc_array, name_array = create_program_tree tok_l filename in
   let _ = eval_program (get_basic_main_prog ()) proc_array name_array in ();;
 
-interpret_file "test_prog.plth";;
-
-(*if|while|do|end|proc|procend|rot|swap|over|divmod|include|else|print|drop|dup*)
+interpret_file "Examples/test_prog.plth";;
