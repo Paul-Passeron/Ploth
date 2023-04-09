@@ -659,12 +659,13 @@ let is_valid_name name arr =
 
 let get_name_index name arr =
   let res = ref (-1) in
-  for i = 0 to (Array.length arr) - 1 do
-    if arr.(i) = name then res := i;
+  for i = 0 to Array.length arr - 1 do
+    if arr.(i) = name then res := i
   done;
   match !res with
-    | -1 -> failwith ("Unknown stack name `"^name^"`.")
-    | a -> a;;
+  | -1 -> failwith ("Unknown stack name `" ^ name ^ "`.")
+  | a -> a
+;;
 
 let eval_program (p : program) proc_array name_array =
   let stack_capacity = 100 in
@@ -783,21 +784,24 @@ let eval_program (p : program) proc_array name_array =
       let id1 = !current_stack in
       let a1, s1 = pop stacks.(id1) in
       stacks.(id1) <- s1;
-      stacks.(id2) <- push a1 (stacks.(id2));
+      stacks.(id2) <- push a1 stacks.(id2);
       aux q
-    | Exp (Keyword Transfer) :: _ -> failwith "Expected valid stack name after `transfer` keyword."
+    | Exp (Keyword Transfer) :: _ ->
+      failwith "Expected valid stack name after `transfer` keyword."
     | Exp (Keyword Dump) :: Exp (Identifier stack1) :: Exp (Identifier stack2) :: q ->
       let id1 = get_name_index stack1 names in
       let id2 = get_name_index stack2 names in
-      stacks.(id2) <- append_stacks (stacks.(id1)) (stacks.(id2));
+      stacks.(id2) <- append_stacks stacks.(id1) stacks.(id2);
       stacks.(id1) <- Empty;
       aux q
-    | Exp (Keyword Dump) :: _ -> failwith "Expected valid stack names after `dump` keyword."
+    | Exp (Keyword Dump) :: _ ->
+      failwith "Expected valid stack names after `dump` keyword."
     | Exp (Keyword Purge) :: Exp (Identifier stack_name) :: q ->
       let id = get_name_index stack_name names in
       stacks.(id) <- Empty;
       aux q
-    | Exp (Keyword Purge) :: q-> failwith "Expected valid stack name after `purge` keyword."
+    | Exp (Keyword Purge) :: q ->
+      failwith "Expected valid stack name after `purge` keyword."
     | Exp e :: q ->
       stacks.(!current_stack) <- push e stacks.(!current_stack);
       aux q
@@ -842,4 +846,4 @@ let interpret_file (filename : string) =
   ()
 ;;
 
-interpret_file "Examples/test_prog.plth";;
+interpret_file "Examples/test_prog.plth"
