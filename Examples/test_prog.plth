@@ -4,22 +4,22 @@ proc decompose_string
     dup length -1 +
     while dup 0 >= do
         over over -1 * over length -1 + +
-        swap . print_endline
+        swap . print "/" print
         -1 +
     end
+    print_new_line
 procend
 
-proc pow
-    1
-    over 1 >= if
-        swap -1 +
-        swap
-        
-    end
+
+proc str
+    "Hello"
 procend
+
+proc str_len str length procend
 
 proc main
-    "H" "h" = print
+    str decompose_string
+    dump
 procend
 
 

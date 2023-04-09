@@ -7,6 +7,9 @@ type intrinsic =
   | Over
   | Length
 
+type debugger =
+  | Dump
+
 type keyword =
   | If
   | Else
@@ -50,6 +53,7 @@ type prog_token =
   | Bool of bool
   | Str of string
   | Identifier of string
+  | Deb of debugger
 ;;
 
 type program =
@@ -81,8 +85,9 @@ let pop (s : 'a stack) : 'a * 'a stack =
 
 let human (t : prog_token) : string =
   match t with
-  | Int _ -> "`integer`"
+  | Int _ -> "`integer` type"
   | Bool _ -> "`bool` type"
+  | Str _ -> "`string` type"
   | Arithmetic Plus -> "`plus` arithmetic"
   | Arithmetic Minus -> "`minus` arithmetic"
   | Arithmetic Mult -> "`mult` arithmetic"
@@ -112,6 +117,12 @@ let print_bool b =
   | _ -> print_string "false"
 ;;
 
+let human_values t = match t with
+  | Int a -> print_int a
+  | Bool a -> print_bool a
+  | Str a -> print_string ("\""^a^"\"")
+  |_ -> ()
+  ;;
 let compiler_message_error_exp (expected : prog_token) (actual : prog_token) =
   "ERROR: Expected " ^ human expected ^ " but actually got " ^ human actual
 ;;
@@ -171,6 +182,21 @@ let in_drop (s : prog_token stack) : prog_token stack =
   let _, s1 = pop s in
   s1
 ;;
+
+let rec dump_stack (s: prog_token stack) = match s with
+  | Empty -> ()
+  | Node (Str a, b) ->
+    print_string (human (Str a));
+    print_string "  --> ";
+    human_values (Str a);
+    print_endline "";
+    dump_stack b
+  | Node (a, b) ->
+    print_string (human a);
+    print_string " --> ";
+    human_values a;
+    print_endline "";
+    dump_stack b;;
 
 let in_print (s : prog_token stack) : prog_token stack =
   let elem, s1 = pop s in
@@ -343,6 +369,7 @@ let get_tok_l (l : string list) : prog_token list =
     | "proc" :: q -> Keyword Proc :: aux q
     | "procend" :: q -> Keyword ProcEnd :: aux q
     | "include" :: q -> Keyword Include :: aux q
+    | "dump" :: q -> Deb Dump :: aux q
     |"." :: q -> Keyword Dot :: aux q
     | "length" :: q -> Intrinsic Length :: aux q
     | e :: q when is_int e -> Int (int_of_string e) :: aux q
@@ -351,7 +378,6 @@ let get_tok_l (l : string list) : prog_token list =
   in
   aux l
 ;;
-
 
 
 
@@ -561,6 +587,7 @@ let eval_program (p : program) proc_array name_array =
     | Exp (Gate Or) :: q -> aux q (ga_or acc)
     | Exp (Gate And) :: q -> aux q (ga_and acc)
     | Exp (Gate Not) :: q -> aux q (ga_not acc)
+    | Exp (Deb Dump) :: q -> dump_stack acc; aux q acc;
     | Exp (Identifier proc_name) :: q ->
       let proc_id = get_proc_id proc_name name_array in
       let proc_prog = proc_array.(proc_id) in
