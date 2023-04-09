@@ -29,3 +29,16 @@ proc rec_fact
         dup -1 + rec_fact *
     end
 procend
+
+proc rev
+    @tmp
+    dup length -1 +
+    "" tmp
+    while dup 0 >= do
+        over over -1 * over length -1 + +
+        swap .
+        !tmp + tmp
+        -1 +
+    end
+    &tmp swap drop swap drop
+procend

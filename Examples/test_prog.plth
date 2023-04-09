@@ -1,25 +1,6 @@
 include "std_lib.plth"
 
-proc decompose_string
-    dup length -1 +
-    while dup 0 >= do
-        over over -1 * over length -1 + +
-        swap . print "/" print
-        -1 +
-    end
-    print_new_line
-procend
-
-
-proc str
-    "Hello"
-procend
-
-proc str_len str length procend
 
 proc main
-    str decompose_string
-    dump
+   "Hello, World" print_endline
 procend
-
-
