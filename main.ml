@@ -79,9 +79,12 @@ type 'a stack =
   | Empty
   | Node of 'a * 'a stack
 
-  let is_stack_empty (s: 'a stack) = match s with
-    | Empty -> true
-    | _ -> false
+let is_stack_empty (s : 'a stack) =
+  match s with
+  | Empty -> true
+  | _ -> false
+;;
+
 let push (elem : 'a) (s : 'a stack) : 'a stack = Node (elem, s)
 
 let rec get_stack_len (s : 'a stack) =
@@ -679,11 +682,12 @@ let get_name_index name arr =
 let print_tab t =
   print_endline "";
   print_string "[";
-  for i = 0 to Array.length t -1 do
+  for i = 0 to Array.length t - 1 do
     print_string t.(i);
-    print_string "; ";
+    print_string "; "
   done;
-  print_string "]";;
+  print_string "]"
+;;
 
 let eval_program (p : program) proc_array name_array =
   let stack_capacity = 100 in
@@ -757,7 +761,7 @@ let eval_program (p : program) proc_array name_array =
       stacks.(!current_stack) <- ga_not stacks.(!current_stack);
       aux q
     | Exp (Deb DebugDump) :: q ->
-      print_endline ("Stack: "^names.(!current_stack));
+      print_endline ("Stack: " ^ names.(!current_stack));
       dump_stack stacks.(!current_stack);
       print_endline "";
       aux q
@@ -767,9 +771,10 @@ let eval_program (p : program) proc_array name_array =
         | [] -> 0
         | e :: q -> e
       in
-      aux (a:: (Exp (Identifier names.(last_id))) :: q)
+      aux (a :: Exp (Identifier names.(last_id)) :: q)
     | Exp (Keyword IsEmpty) :: q ->
-      stacks.(!current_stack) <- push (Bool (is_stack_empty (stacks.(!current_stack)))) (stacks.(!current_stack));
+      stacks.(!current_stack)
+        <- push (Bool (is_stack_empty stacks.(!current_stack))) stacks.(!current_stack);
       aux q
     | Exp (Keyword Last) :: q ->
       let last_id =
@@ -822,9 +827,9 @@ let eval_program (p : program) proc_array name_array =
       let () =
         match !history with
         | [] -> current_stack := 0
-        | [e] -> current_stack := 0 
+        | [ e ] -> current_stack := 0
         | e :: b :: q ->
-          history := (b::q);
+          history := b :: q;
           current_stack := b
       in
       aux q
@@ -900,4 +905,5 @@ let interpret_file (filename : string) =
   ()
 ;;
 
-interpret_file "Examples/test_prog.plth";;
+interpret_file "Examples/test_prog.plth"
+;;
