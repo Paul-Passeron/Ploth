@@ -1,6 +1,47 @@
 include "std_lib.plth"
 
+proc debugger
+    "########" print_endline
+    debugdump
+    "########" print_endline
+procend
+
+proc revstack
+    var tmp
+    while isempty !! do
+        last tmp transfer
+    end
+    tmp last dump
+procend
+
+
+proc stack_length
+    var counter in counter 0 return
+    var tmp_stack
+    while isempty !! do
+        counter last transfer 1 + last counter transfer
+        last tmp_stack transfer
+    end
+    tmp_stack last dump revstack
+    counter last dump
+procend
+
+
+
+proc two_sum
+    var i in i 0 return
+    var j in j 0 return
+    // while
+    //     in i dup return i last transfer // i
+        
+procend
+
+
+
+
+
 
 proc main
-   "Hello, World" print_endline
+    "a" "b" "c" debugdump stack_length debugdump
 procend
+

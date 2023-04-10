@@ -30,15 +30,71 @@ proc rec_fact
     end
 procend
 
+    proc invert2elem
+    var invert2elem_tmp
+    var i1
+    var i2
+    var e1
+    var e2
+    var index
+    debugger
+     dup dup > if
+        last i1 transfer last i2 transfer
+     else
+        last i2 transfer last i1 transfer    
+     end
+    in index 0 debugger return
+     while isempty !! do
+        in index dup return index last transfer
+        in i1 dup return i1 last transfer
+        = if
+            dup last e1 transfer
+            last invert2elem_tmp transfer
+        else
+            in index dup return
+            index last transfer
+            in i2 dup return i2 last transfer
+            = if
+                last e2 transfer
+                e1 invert2elem_tmp dump
+            else
+                last invert2elem_tmp transfer
+            end
+        end
+        in index 1 + return
+     end
+    invert2elem_tmp last dump
+    index purge
+    invert2elem_tmp purge
+    in index 0 return
+    while isempty !! do
+        in index dup return index last transfer
+        in i1 dup return i1 last transfer
+        = if
+            dump e2 invert2elem_tmp
+        else
+            last invert2elem_tmp transfer
+    end
+    invert2elem_tmp last dump
+procend
+
+proc curr_stack_length
+    var tmp
+
+
+procend
+
 proc rev
-    @tmp
-    dup length -1 +
-    "" tmp
+    dup length -1 + 
+    var std_lib_proc_rev 
+    in std_lib_proc_rev "" 
+    return
     while dup 0 >= do
         over over -1 * over length -1 + +
         swap .
-        !tmp + tmp
+        std_lib_proc_rev last transfer + last std_lib_proc_rev transfer
         -1 +
     end
-    &tmp swap drop swap drop
+    std_lib_proc_rev last dump
+    swap drop swap drop
 procend

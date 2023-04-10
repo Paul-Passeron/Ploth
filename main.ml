@@ -26,6 +26,9 @@ type keyword =
   | Dump
   | Purge
   | In
+  | Return
+  | Last
+  | IsEmpty
 
 type arithmetic =
   | Plus
@@ -76,6 +79,9 @@ type 'a stack =
   | Empty
   | Node of 'a * 'a stack
 
+  let is_stack_empty (s: 'a stack) = match s with
+    | Empty -> true
+    | _ -> false
 let push (elem : 'a) (s : 'a stack) : 'a stack = Node (elem, s)
 
 let rec get_stack_len (s : 'a stack) =
@@ -392,6 +398,9 @@ let get_tok_l (l : string list) : prog_token list =
     | "var" :: q -> Declarator Var :: aux q
     | "debugdump" :: q -> Deb DebugDump :: aux q
     | "length" :: q -> Intrinsic Length :: aux q
+    | "return" :: q -> Keyword Return :: aux q
+    | "last" :: q -> Keyword Last :: aux q
+    | "isempty" :: q -> Keyword IsEmpty :: aux q
     | e :: q when is_int e -> Int (int_of_string e) :: aux q
     | e :: q when is_str e ->
       let n = String.length e in
@@ -667,16 +676,26 @@ let get_name_index name arr =
   | a -> a
 ;;
 
+let print_tab t =
+  print_endline "";
+  print_string "[";
+  for i = 0 to Array.length t -1 do
+    print_string t.(i);
+    print_string "; ";
+  done;
+  print_string "]";;
+
 let eval_program (p : program) proc_array name_array =
   let stack_capacity = 100 in
   let stacks = Array.make stack_capacity Empty in
   let names = Array.make stack_capacity "" in
+  let history = ref [ 0 ] in
   names.(0) <- "default";
   let stack_count = ref 1 in
   let current_stack = ref 0 in
   let rec aux p =
     match p with
-    | [] -> stacks.(0)
+    | [] -> stacks.(!current_stack)
     | Exp (Arithmetic Plus) :: q ->
       stacks.(!current_stack) <- ar_plus stacks.(!current_stack);
       aux q
@@ -738,8 +757,27 @@ let eval_program (p : program) proc_array name_array =
       stacks.(!current_stack) <- ga_not stacks.(!current_stack);
       aux q
     | Exp (Deb DebugDump) :: q ->
+      print_endline ("Stack: "^names.(!current_stack));
       dump_stack stacks.(!current_stack);
+      print_endline "";
       aux q
+    | a :: Exp (Keyword Last) :: q ->
+      let last_id =
+        match !history with
+        | [] -> 0
+        | e :: q -> e
+      in
+      aux (a:: (Exp (Identifier names.(last_id))) :: q)
+    | Exp (Keyword IsEmpty) :: q ->
+      stacks.(!current_stack) <- push (Bool (is_stack_empty (stacks.(!current_stack)))) (stacks.(!current_stack));
+      aux q
+    | Exp (Keyword Last) :: q ->
+      let last_id =
+        match !history with
+        | [] -> 0
+        | e :: q -> e
+      in
+      aux (Exp (Identifier names.(last_id)) :: q)
     | Exp (Declarator Var) :: Exp (Identifier stack_name) :: q ->
       let () =
         if not (is_valid_name stack_name names)
@@ -748,14 +786,48 @@ let eval_program (p : program) proc_array name_array =
       names.(!stack_count) <- stack_name;
       incr stack_count;
       aux q
+    | Exp (Identifier stack2) :: Exp (Identifier stack1) :: Exp (Keyword Transfer) :: q ->
+      let id2 = get_name_index stack1 names in
+      let id1 = get_name_index stack2 names in
+      let a1, s1 = pop stacks.(id1) in
+      stacks.(id1) <- s1;
+      stacks.(id2) <- push a1 stacks.(id2);
+      aux q
+    | _ :: Exp (Keyword Transfer) :: _ ->
+      failwith "Expected valid stack names before `transfer` keyword."
+    | Exp (Identifier stack1) :: Exp (Identifier stack2) :: Exp (Keyword Dump) :: q ->
+      let id1 = get_name_index stack1 names in
+      let id2 = get_name_index stack2 names in
+      stacks.(id2) <- append_stacks stacks.(id1) stacks.(id2);
+      stacks.(id1) <- Empty;
+      aux q
+    | _ :: Exp (Keyword Dump) :: _ ->
+      failwith "Expected valid stack names before `dump` keyword."
+    | Exp (Identifier stack_name) :: Exp (Keyword Purge) :: q ->
+      let id = get_name_index stack_name names in
+      stacks.(id) <- Empty;
+      aux q
+    | Exp (Keyword Purge) :: _ ->
+      failwith "Expected valid stack name before `purge` keyword."
     | Exp (Declarator Var) :: _ ->
       failwith "`var` declarator must be followed by a valid stack name."
     | Exp (Keyword In) :: Exp (Identifier stack_name) :: q ->
-      (* let () = if is_valid_name stack_name names then failwith ("stack "^stack_name^" referenced before creation.") in *)
-      current_stack := get_name_index stack_name names;
+      let id = get_name_index stack_name names in
+      current_stack := id;
+      history := id :: !history;
       aux q
     | Exp (Keyword In) :: _ ->
       failwith "`in` keyword must be followed by a valid stack name."
+    | Exp (Keyword Return) :: q ->
+      let () =
+        match !history with
+        | [] -> current_stack := 0
+        | [e] -> current_stack := 0 
+        | e :: b :: q ->
+          history := (b::q);
+          current_stack := b
+      in
+      aux q
     | Exp (Identifier proc_name) :: q ->
       let proc_id = get_proc_id proc_name name_array in
       let proc_prog = proc_array.(proc_id) in
@@ -779,29 +851,6 @@ let eval_program (p : program) proc_array name_array =
         | _ -> failwith "Invalid arguments for `.`keyword."
       in
       to_ret
-    | Exp (Keyword Transfer) :: Exp (Identifier stack1) :: q ->
-      let id2 = get_name_index stack1 names in
-      let id1 = !current_stack in
-      let a1, s1 = pop stacks.(id1) in
-      stacks.(id1) <- s1;
-      stacks.(id2) <- push a1 stacks.(id2);
-      aux q
-    | Exp (Keyword Transfer) :: _ ->
-      failwith "Expected valid stack name after `transfer` keyword."
-    | Exp (Keyword Dump) :: Exp (Identifier stack1) :: Exp (Identifier stack2) :: q ->
-      let id1 = get_name_index stack1 names in
-      let id2 = get_name_index stack2 names in
-      stacks.(id2) <- append_stacks stacks.(id1) stacks.(id2);
-      stacks.(id1) <- Empty;
-      aux q
-    | Exp (Keyword Dump) :: _ ->
-      failwith "Expected valid stack names after `dump` keyword."
-    | Exp (Keyword Purge) :: Exp (Identifier stack_name) :: q ->
-      let id = get_name_index stack_name names in
-      stacks.(id) <- Empty;
-      aux q
-    | Exp (Keyword Purge) :: q ->
-      failwith "Expected valid stack name after `purge` keyword."
     | Exp e :: q ->
       stacks.(!current_stack) <- push e stacks.(!current_stack);
       aux q
@@ -841,9 +890,14 @@ let get_basic_main_prog () = Sub (Main, [ Exp (Identifier "main") ], [], false)
 let interpret_file (filename : string) =
   let string_l = get_string_list_from_file filename in
   let tok_l = get_tok_l string_l in
-  let _, proc_array, name_array = create_program_tree tok_l filename in
-  let _ = eval_program (get_basic_main_prog ()) proc_array name_array in
+  let p, proc_array, name_array = create_program_tree tok_l filename in
+  let to_eval =
+    match p with
+    | Sub (a, b, c, d) -> Sub (a, b @ [ get_basic_main_prog () ], c, d)
+    | _ -> get_basic_main_prog ()
+  in
+  let _ = eval_program to_eval proc_array name_array in
   ()
 ;;
 
-interpret_file "Examples/test_prog.plth"
+interpret_file "Examples/test_prog.plth";;
