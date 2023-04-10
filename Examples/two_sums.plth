@@ -26,13 +26,7 @@ proc two_sum
     res last transfer
 procend
 
-
-
-
-
-
 proc main
     2 11 7 15
     9 two_sum print_endline print_endline
 procend
-

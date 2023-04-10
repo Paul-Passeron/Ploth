@@ -98,3 +98,47 @@ proc rev
     std_lib_proc_rev last dump
     swap drop swap drop
 procend
+
+
+proc revstack
+    var proc_revstack_tmp
+    while isempty !! do
+        last proc_revstack_tmp transfer
+    end
+    proc_revstack_tmp last dump
+procend
+
+
+proc stack_length
+    var proc_stack_length_counter in proc_stack_length_counter 0 return
+    var tmp_stack
+    while isempty !! do
+        proc_stack_length_counter last transfer 1 + last proc_stack_length_counter transfer
+        last tmp_stack transfer
+    end
+    tmp_stack last dump revstack
+    proc_stack_length_counter last dump
+procend
+
+
+proc ith_elem
+    var proc_ith_elem_target last proc_ith_elem_target transfer 
+    var proc_ith_elem_counter in proc_ith_elem_counter 0 return
+    var proc_ith_elem_tmp_stack 
+    var proc_ith_elem_res 
+    while isempty !!  do
+        in proc_ith_elem_counter dup return in proc_ith_elem_target dup return
+        proc_ith_elem_counter last transfer proc_ith_elem_target last transfer = if
+            dup last proc_ith_elem_res transfer
+        end
+        last proc_ith_elem_tmp_stack transfer
+        proc_ith_elem_counter last transfer 1 + last proc_ith_elem_counter transfer
+    end
+    in proc_ith_elem_tmp_stack revstack return
+    proc_ith_elem_tmp_stack last dump
+    proc_ith_elem_res last dump
+    proc_ith_elem_target purge
+    proc_ith_elem_counter purge
+    proc_ith_elem_tmp_stack purge
+    proc_ith_elem_res purge
+procend

@@ -156,8 +156,8 @@ let ar_plus (s : prog_token stack) : prog_token stack =
   let cons_a, s2 = pop s1 in
   match cons_b, cons_a with
   | Int b, Int a -> push (Int (a + b)) s2
-  | _, Int _ -> failwith (compiler_message_error_exp (Int 0) cons_b)
-  | Int _, _ -> failwith (compiler_message_error_exp (Int 0) cons_a)
+  | _, Int _ -> failwith ("+ /// "^(compiler_message_error_exp (Int 0) cons_b))
+  | Int _, _ -> failwith ("+ /// "^(compiler_message_error_exp (Int 0) cons_a))
   | Str st2, Str st1 -> push (Str (st1 ^ st2)) s2
   | _, _ -> failwith (compiler_message_error_exp (Int 0) cons_b)
 ;;
@@ -502,6 +502,8 @@ let get_proc_count name_arr =
   !res
 ;;
 
+let get_stack_count = get_proc_count;;
+
 let get_global_path (filename : string) =
   let l = get_list_of_chars filename in
   let last = ref (-1) in
@@ -528,11 +530,22 @@ let update_proc_with_include proc_arr name_arr inc_proc_arr inc_name_arr =
   done
 ;;
 
+let update_stack_array name_arr inc_name_arr =
+  let stack_count = get_stack_count name_arr in
+  let inc_stack_count = get_stack_count inc_name_arr in
+  for i = 0 to inc_stack_count do
+    name_arr.(stack_count + i) <- inc_name_arr.(i)
+  done
+;;
 let rec create_program_tree (tok_l : prog_token list) filename =
   let max_proc_count = 100 in
+  let max_stack_count = 100 in
   let proc_array : subprogram array = Array.make max_proc_count [] in
   let name_array : string array = Array.make max_proc_count "" in
+  let stack_names_array : string array = Array.make max_stack_count "" in
+  stack_names_array.(0) <- "default";
   let proc_count = ref 0 in
+  let stack_count = ref 1 in
   let rec aux (tok_l : prog_token list) (s : program stack) (proc_flag : bool) : program =
     match tok_l with
     | [] ->
@@ -552,7 +565,7 @@ let rec create_program_tree (tok_l : prog_token list) filename =
           Sub (Cond, if_branch, else_branch, true)
         | _ -> failwith "Syntax Error"
       in
-      aux q (push sub s1) proc_flag
+      aux q (push sub s1) proc_flag      
     | Keyword End :: q ->
       let p, s1 = pop s in
       let () =
@@ -569,6 +582,8 @@ let rec create_program_tree (tok_l : prog_token list) filename =
       in
       aux q (push h s2) proc_flag
     | Declarator Var :: Identifier stack_name :: q ->
+      stack_names_array.(!stack_count) <- stack_name;
+      incr stack_count;
       let p, s1 = pop s in
       let sub =
         match p with
@@ -628,9 +643,10 @@ let rec create_program_tree (tok_l : prog_token list) filename =
       p
     | Keyword Include :: Str include_filename :: q ->
       let global_include_filename = get_global_path filename ^ include_filename in
-      let include_file_tree, inc_procs, inc_names =
+      let include_file_tree, inc_procs, inc_names, inc_stack_names =
         get_prog_tree_from_file global_include_filename filename
       in
+      update_stack_array stack_names_array inc_stack_names;
       update_proc_with_include proc_array name_array inc_procs inc_names;
       proc_count := get_proc_count inc_names;
       let p, s1 = pop s in
@@ -653,7 +669,7 @@ let rec create_program_tree (tok_l : prog_token list) filename =
       in
       aux q (push sub s1) proc_flag
   in
-  aux tok_l (Node (Sub (Main, [], [], false), Empty)) false, proc_array, name_array
+  aux tok_l (Node (Sub (Main, [], [], false), Empty)) false, proc_array, name_array, stack_names_array
 
 and get_prog_tree_from_file (filename : string) f2 =
   let string_l = get_string_list_from_file filename in
@@ -664,7 +680,7 @@ and get_prog_tree_from_file (filename : string) f2 =
 let is_valid_name name arr =
   let res = ref true in
   for i = 0 to Array.length arr - 1 do
-    if arr.(i) = name then res := false
+    if arr.(i) = name then (res := false; print_int i)
   done;
   !res
 ;;
@@ -689,13 +705,12 @@ let print_tab t =
   print_string "]"
 ;;
 
-let eval_program (p : program) proc_array name_array =
-  let stack_capacity = 100 in
+let eval_program (p : program) proc_array name_array names =
+  let stack_capacity = 1000 in
   let stacks = Array.make stack_capacity Empty in
-  let names = Array.make stack_capacity "" in
   let history = ref [ 0 ] in
   names.(0) <- "default";
-  let stack_count = ref 1 in
+  let stack_count = get_stack_count name_array in
   let current_stack = ref 0 in
   let rec aux p =
     match p with
@@ -784,12 +799,10 @@ let eval_program (p : program) proc_array name_array =
       in
       aux (Exp (Identifier names.(last_id)) :: q)
     | Exp (Declarator Var) :: Exp (Identifier stack_name) :: q ->
-      let () =
+      (* let () =
         if not (is_valid_name stack_name names)
         then failwith ("stack name " ^ stack_name ^ " is already used.")
-      in
-      names.(!stack_count) <- stack_name;
-      incr stack_count;
+      in*)
       aux q
     | Exp (Identifier stack2) :: Exp (Identifier stack1) :: Exp (Keyword Transfer) :: q ->
       let id2 = get_name_index stack1 names in
@@ -895,13 +908,13 @@ let get_basic_main_prog () = Sub (Main, [ Exp (Identifier "main") ], [], false)
 let interpret_file (filename : string) =
   let string_l = get_string_list_from_file filename in
   let tok_l = get_tok_l string_l in
-  let p, proc_array, name_array = create_program_tree tok_l filename in
+  let p, proc_array, name_array, stack_names = create_program_tree tok_l filename in
   let to_eval =
     match p with
     | Sub (a, b, c, d) -> Sub (a, b @ [ get_basic_main_prog () ], c, d)
     | _ -> get_basic_main_prog ()
   in
-  let _ = eval_program to_eval proc_array name_array in
+  let _ = eval_program to_eval proc_array name_array stack_names in
   ()
 ;;
 
